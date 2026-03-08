@@ -5,6 +5,9 @@ mujoco viewer sends json data via udp
 
 # Installation
 install mujoco on windows https://mujoco.readthedocs.io/en/latest/programming/#getting-started
+install glfw if necessary
+place json.hpp under nlohmann/ directory https://json.nlohmann.me/integration/
+modify MUJOCO_ROOT on CMakeLists.txt https://github.com/Qualot/Mujoco_Win_App/blob/main/CMakeLists.txt#L7
 
 # Build
 ```
