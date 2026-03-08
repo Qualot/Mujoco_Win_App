@@ -164,12 +164,17 @@ void SimulationManager::loadModelNames()
         }
     }
 
+    
+    std::printf("joint: ");
     for (auto& j : joint_names)
-        std::printf("joint: %s, ", j.c_str());
+        std::printf("%s, ", j.c_str());
 
-    for (auto& t : tendon_names)
-        std::printf("tendon: %s, ", t.c_str());
     std::printf("\n");
+    std::printf("tendon: ");
+    for (auto& t : tendon_names)
+        std::printf("%s, ", t.c_str());
+
+    std::printf("\n\n");
 
 }
 
