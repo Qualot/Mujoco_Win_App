@@ -10,8 +10,11 @@ Its definite reason is unclear.
 
 # Installation
 install mujoco on windows https://mujoco.readthedocs.io/en/latest/programming/#getting-started
+
 install glfw if necessary
+
 place json.hpp under nlohmann/ directory https://json.nlohmann.me/integration/
+
 modify MUJOCO_ROOT on CMakeLists.txt https://github.com/Qualot/Mujoco_Win_App/blob/main/CMakeLists.txt#L7
 
 # Build
@@ -34,5 +37,7 @@ cp \location\to\bin\mujoco.dll .\build\Release\
 
 # TODO
 explanation of software components
+
 explanation of UDP packet
+
 testing some models with the same code
