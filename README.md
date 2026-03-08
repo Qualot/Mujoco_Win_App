@@ -1,7 +1,12 @@
 # Mujoco_Win_App
-mujoco viewer sends json data via udp
+mujoco viewer sends json data via udp (written with ChatGPT)
 
 ![thumbnail](https://raw.githubusercontent.com/Qualot/Mujoco_Win_App/main/media/thumbnail.png)
+
+# Motivation
+Assuming controller programs on WSL2 (on Windows11). 
+In my environment, (1) bin/simulate on WSL2 and (2) mujoco python on Windows 11 are too slow. 
+Its definite reason is unclear. 
 
 # Installation
 install mujoco on windows https://mujoco.readthedocs.io/en/latest/programming/#getting-started
@@ -26,3 +31,8 @@ cp \location\to\bin\mujoco.dll .\build\Release\
 .\build\Release\Mujoco_Win_App.exe .\models\scene.xml sendIP sendPort recvPort
 (e.g. .\build\Release\Mujoco_Win_App.exe .\models\scene.xml 127.0.0.1 5005 5006)
 ```
+
+# TODO
+explanation of software components
+explanation of UDP packet
+testing some models with the same code
