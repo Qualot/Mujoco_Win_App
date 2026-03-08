@@ -17,6 +17,7 @@ SimulationManager::SimulationManager(const char* modelFile,
       sender(sendIp, sendPort),
       receiver(recvPort)
 {
+    loadModelNames();
     initializeIds();
     receiver.startReceiveThread();
 }
@@ -114,9 +115,6 @@ std::vector<uint8_t> SimulationManager::serializeData() {
 void SimulationManager::initializeIds() {
     mjModel* m = viewer.model();
 
-    joint_names = {"hip", "knee", "ankle"};
-    tendon_names = {"GMAX", "IL", "HAM", "RF", "BF", "VAS", "GAS", "SOL", "TA"}; 
-
     // --- Initialize joints ---
     for (const auto& name : joint_names) {
         int jid = mj_name2id(m, mjOBJ_JOINT, name.c_str());
@@ -141,6 +139,38 @@ void SimulationManager::initializeIds() {
             tension_sensor_ids.push_back(-1); // sensor not found
         }
     }
+}
+
+// Load joint and tendon names from the model for JSON output
+void SimulationManager::loadModelNames()
+{
+    mjModel* m = viewer.model();
+    joint_names.clear();
+    tendon_names.clear();
+
+    // joints
+    for (int i = 0; i < m->njnt; i++) {
+        const char* name = mj_id2name(m, mjOBJ_JOINT, i);
+        if (name) {
+            joint_names.emplace_back(name);
+        }
+    }
+
+    // tendons
+    for (int i = 0; i < m->ntendon; i++) {
+        const char* name = mj_id2name(m, mjOBJ_TENDON, i);
+        if (name) {
+            tendon_names.emplace_back(name);
+        }
+    }
+
+    for (auto& j : joint_names)
+        std::printf("joint: %s, ", j.c_str());
+
+    for (auto& t : tendon_names)
+        std::printf("tendon: %s, ", t.c_str());
+    std::printf("\n");
+
 }
 
 // Return whether the viewer window should close

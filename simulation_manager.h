@@ -40,4 +40,5 @@ private:
     std::vector<double> processTenJ(int rows, int cols, int start_id);
     std::vector<uint8_t> serializeData();
     void initializeIds();
+    void loadModelNames();
 };
