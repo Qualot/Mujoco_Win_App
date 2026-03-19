@@ -35,6 +35,7 @@ private:
     std::vector<int> tension_sensor_ids;  // Tendon actuator force sensor indices in sensordata
 
     std::vector<std::string> joint_names;
+    std::vector<std::string> joint_names_rpy; // expand free joints and ball joints into separate roll/pitch/yaw entries
     std::vector<std::string> tendon_names;
 
     std::vector<double> processTenJ(int rows, int cols, int start_id);

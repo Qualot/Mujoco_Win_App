@@ -78,6 +78,7 @@ std::vector<uint8_t> SimulationManager::serializeData() {
     nlohmann::json j;
     j["sim_time"] = d->time;
     j["joint_names"] = joint_names;
+    j["joint_names_rpy"] = joint_names_rpy;
     j["tendon_names"] = tendon_names;
     j["qpos"] = std::vector<double>(d->qpos, d->qpos + m->nq);
     j["qvel"] = std::vector<double>(d->qvel, d->qvel + m->nv);
@@ -146,6 +147,7 @@ void SimulationManager::loadModelNames()
 {
     mjModel* m = viewer.model();
     joint_names.clear();
+    joint_names_rpy.clear();
     tendon_names.clear();
 
     // joints
@@ -153,6 +155,23 @@ void SimulationManager::loadModelNames()
         const char* name = mj_id2name(m, mjOBJ_JOINT, i);
         if (name) {
             joint_names.emplace_back(name);
+
+            int jtype = m->jnt_type[i];
+            if (jtype == mjJNT_FREE) {
+                // joint_names_rpy.push_back(std::string(name) + "_tx");
+                // joint_names_rpy.push_back(std::string(name) + "_ty");
+                // joint_names_rpy.push_back(std::string(name) + "_tz");
+                joint_names_rpy.push_back(std::string(name) + "_rx");
+                joint_names_rpy.push_back(std::string(name) + "_ry");
+                joint_names_rpy.push_back(std::string(name) + "_rz");
+            }
+            else if (jtype == mjJNT_BALL) {
+                joint_names_rpy.push_back(std::string(name) + "_rx");
+                joint_names_rpy.push_back(std::string(name) + "_ry");
+                joint_names_rpy.push_back(std::string(name) + "_rz");
+            }
+
+
         }
     }
 
