@@ -169,6 +169,9 @@ void SimulationManager::loadModelNames()
                 joint_names_rpy.push_back(std::string(name) + "_rx");
                 joint_names_rpy.push_back(std::string(name) + "_ry");
                 joint_names_rpy.push_back(std::string(name) + "_rz");
+            }else
+            {
+                joint_names_rpy.push_back(std::string(name));
             }
 
 
