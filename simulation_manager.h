@@ -45,4 +45,7 @@ private:
     void loadModelNames();
 
     nlohmann::json serializeJointQposPerJoint();
+    nlohmann::json serializeJointRPY();
+    std::vector<double> serializeQposRPYTheta();
+    std::vector<double> serializeQvelRPYTheta();
 };

@@ -82,7 +82,10 @@ std::vector<uint8_t> SimulationManager::serializeData() {
     j["tendon_names"] = tendon_names;
     j["qpos"] = std::vector<double>(d->qpos, d->qpos + m->nq);
     j["qpos_per_joint"] = serializeJointQposPerJoint();
+    j["joint_rpy"] = serializeJointRPY();
+    j["qpos_rpy_theta_l"] = serializeQposRPYTheta();
     j["qvel"] = std::vector<double>(d->qvel, d->qvel + m->nv);
+    j["qvel_rpy_theta_l"] = serializeQvelRPYTheta();
     j["joint_qpos_ids"] = joint_qpos_ids;
     j["joint_qvel_ids"] = joint_qvel_ids;
     j["length"] = std::vector<double>(d->ten_length, d->ten_length + tendon_names.size());
@@ -233,6 +236,161 @@ nlohmann::json SimulationManager::serializeJointQposPerJoint()
     return j;
 }
 
+#include "mujoco/mujoco.h"  // mju_quat2Mat
+#include <cmath>
+#include <vector>
+
+// --- quaternion 2 RPY (ZYX, ROS compatible) ---
+static std::vector<double> quat2rpy_zyx(const mjtNum* quat)
+{
+    mjtNum R[9];
+    mju_quat2Mat(R, quat);
+
+    // ZYX (Yaw-Pitch-Roll) order
+    double yaw   = std::atan2(R[1], R[0]);
+    double pitch = std::asin(-R[2]);
+    double roll  = std::atan2(R[5], R[8]);
+
+    // round to 4 decimal places for cleaner JSON output
+    auto round4 = [](double val) { return std::round(val * 10000.0) / 10000.0; };
+
+    return { round4(roll), round4(pitch), round4(yaw) };
+}
+
+// --- SimulationManager member function ---
+nlohmann::json SimulationManager::serializeJointRPY()
+{
+    mjModel* m = viewer.model();
+    mjData*  d = viewer.data();
+
+    nlohmann::json j;
+
+    for (int jid = 0; jid < m->njnt; jid++)
+    {
+        const char* name = mj_id2name(m, mjOBJ_JOINT, jid);
+        if (!name) continue;
+
+        int jtype = m->jnt_type[jid];
+
+        // free or ball joint only
+        if (jtype == mjJNT_FREE || jtype == mjJNT_BALL)
+        {
+            int start = m->jnt_qposadr[jid];
+            const mjtNum* quat;
+
+            if (jtype == mjJNT_FREE)
+                quat = d->qpos + start + 3;  // free joint: pos3 + quat4
+            else
+                quat = d->qpos + start;      // ball joint: quat4
+
+            j[name] = quat2rpy_zyx(quat);
+        }
+    }
+
+    return j;
+}
+
+// --- Serialize qpos values but convert free/ball joints to RPY angles ---
+std::vector<double> SimulationManager::serializeQposRPYTheta()
+{
+    mjModel* m = viewer.model();
+    mjData*  d = viewer.data();
+
+    std::vector<double> result;
+
+    // Lambda for rounding values to 4 decimal places
+    auto round4 = [](double val) { return std::round(val * 10000.0) / 10000.0; };
+
+    for (int jid = 0; jid < m->njnt; jid++)
+    {
+        int jtype = m->jnt_type[jid];
+        int start = m->jnt_qposadr[jid];
+
+        if (jtype == mjJNT_FREE || jtype == mjJNT_BALL)
+        {
+            // For free or ball joints, extract quaternion
+            const mjtNum* quat;
+            if (jtype == mjJNT_FREE)
+                quat = d->qpos + start + 3; // free joint: first 3 are position, next 4 are quaternion
+            else
+                quat = d->qpos + start;     // ball joint: quaternion only
+
+            // Convert quaternion to rotation matrix
+            mjtNum R[9];
+            mju_quat2Mat(R, quat);
+
+            // Convert rotation matrix to ZYX (Yaw-Pitch-Roll) Euler angles
+            mjtNum euler[3];
+            euler[0] = std::atan2(R[5], R[8]);  // roll (X-axis)
+            euler[1] = std::asin(-R[2]);        // pitch (Y-axis)
+            euler[2] = std::atan2(R[1], R[0]);  // yaw (Z-axis)
+
+            // Append RPY to result vector
+            result.push_back(round4(euler[0]));
+            result.push_back(round4(euler[1]));
+            result.push_back(round4(euler[2]));
+        }
+        else if (jtype == mjJNT_HINGE || jtype == mjJNT_SLIDE)
+        {
+            // For hinge or slide joints, append scalar qpos
+            result.push_back(round4(d->qpos[start]));
+        }
+        else
+        {
+            // For other joint types, you may skip or append 0.0
+            // result.push_back(0.0);
+        }
+    }
+
+    return result;
+}
+
+// --- Serialize qvel values but convert free/ball joints to RPY rates ---
+std::vector<double> SimulationManager::serializeQvelRPYTheta()
+{
+    mjModel* m = viewer.model();
+    mjData*  d = viewer.data();
+
+    std::vector<double> result;
+
+    // Lambda for rounding values to 4 decimal places
+    auto round4 = [](double val) { return std::round(val * 10000.0) / 10000.0; };
+
+    for (int jid = 0; jid < m->njnt; jid++)
+    {
+        int jtype = m->jnt_type[jid];
+        int qpos_start = m->jnt_qposadr[jid];
+        int qvel_start = m->jnt_dofadr[jid];
+
+        if (jtype == mjJNT_FREE)
+        {
+            // free joint: first 3 linear velocities, next 3 angular velocities
+            // We only take angular velocity (RPY rates)
+            result.push_back(round4(d->qvel[qvel_start + 0])); // roll rate
+            result.push_back(round4(d->qvel[qvel_start + 1])); // pitch rate
+            result.push_back(round4(d->qvel[qvel_start + 2])); // yaw rate
+        }
+        else if (jtype == mjJNT_BALL)
+        {
+            // ball joint: 3 angular velocity DOF
+            result.push_back(round4(d->qvel[qvel_start + 0]));
+            result.push_back(round4(d->qvel[qvel_start + 1]));
+            result.push_back(round4(d->qvel[qvel_start + 2]));
+        }
+        else if (jtype == mjJNT_HINGE || jtype == mjJNT_SLIDE)
+        {
+            // scalar joint velocity
+            result.push_back(round4(d->qvel[qvel_start]));
+        }
+        else
+        {
+            // other joint types: optional skip or zero
+            // result.push_back(0.0);
+        }
+    }
+
+    return result;
+}
 
 // Return whether the viewer window should close
 bool SimulationManager::shouldClose() const {
