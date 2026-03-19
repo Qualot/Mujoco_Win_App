@@ -12,7 +12,7 @@ link_directories(${MUJOCO_ROOT}/lib)
 find_package(glfw3 CONFIG REQUIRED)
 
 # ========= nlohmann/json =========
-# find_package(nlohmann_json CONFIG REQUIRED)
+#find_package(nlohmann_json CONFIG REQUIRED)
 
 # Viewer library
 add_library(Viewer viewer.cc viewer.h)
@@ -25,7 +25,7 @@ add_library(UDPReceiver udp_receiver.cc udp_receiver.h)
 
 # SimulationManager library
 add_library(SimulationManager simulation_manager.cc simulation_manager.h)
-target_include_directories(SimulationManager PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(SimulationManager PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(SimulationManager PUBLIC Viewer UDPSender UDPReceiver)
 
 # Main executable

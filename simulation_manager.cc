@@ -81,6 +81,7 @@ std::vector<uint8_t> SimulationManager::serializeData() {
     j["joint_names_rpy"] = joint_names_rpy;
     j["tendon_names"] = tendon_names;
     j["qpos"] = std::vector<double>(d->qpos, d->qpos + m->nq);
+    j["qpos_per_joint"] = serializeJointQposPerJoint();
     j["qvel"] = std::vector<double>(d->qvel, d->qvel + m->nv);
     j["joint_qpos_ids"] = joint_qpos_ids;
     j["joint_qvel_ids"] = joint_qvel_ids;
@@ -199,6 +200,39 @@ void SimulationManager::loadModelNames()
     std::printf("\n\n");
 
 }
+
+// Serialize joint qpos values per joint into JSON object with joint names as keys
+nlohmann::json SimulationManager::serializeJointQposPerJoint()
+{
+    mjModel* m = viewer.model();
+    mjData*  d = viewer.data();
+
+    nlohmann::json j;
+
+    for (int jid = 0; jid < m->njnt; jid++)
+    {
+        const char* name = mj_id2name(m, mjOBJ_JOINT, jid);
+        if (!name) continue;
+
+        int start = m->jnt_qposadr[jid];
+
+        int end;
+        if (jid < m->njnt - 1)
+            end = m->jnt_qposadr[jid + 1];
+        else
+            end = m->nq;
+
+        std::vector<double> q;
+
+        for (int i = start; i < end; i++)
+            q.push_back(round4(d->qpos[i]));
+
+        j[name] = q;
+    }
+
+    return j;
+}
+
 
 // Return whether the viewer window should close
 bool SimulationManager::shouldClose() const {

@@ -5,6 +5,7 @@
 #include <vector>
 #include <string>
 #include <cstdint>
+#include <nlohmann/json.hpp>
 
 // SimulationManager class manages MuJoCo simulation, UDP send/receive, and control updates
 class SimulationManager {
@@ -42,4 +43,6 @@ private:
     std::vector<uint8_t> serializeData();
     void initializeIds();
     void loadModelNames();
+
+    nlohmann::json serializeJointQposPerJoint();
 };
