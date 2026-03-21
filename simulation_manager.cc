@@ -4,6 +4,10 @@
 #include <iostream>
 #include <cmath>
 
+#include "mujoco/mujoco.h"  // mju_quat2Mat
+#include <vector>
+
+
 inline double round4(double val) {
     return std::round(val * 10000.0) / 10000.0;
 }
@@ -236,20 +240,16 @@ nlohmann::json SimulationManager::serializeJointQposPerJoint()
     return j;
 }
 
-#include "mujoco/mujoco.h"  // mju_quat2Mat
-#include <cmath>
-#include <vector>
-
 // --- quaternion 2 RPY (ZYX, ROS compatible) ---
 static std::vector<double> quat2rpy_zyx(const mjtNum* quat)
 {
     mjtNum R[9];
     mju_quat2Mat(R, quat);
 
-    // ZYX (Yaw-Pitch-Roll) order
-    double yaw   = std::atan2(R[1], R[0]);
-    double pitch = std::asin(-R[2]);
-    double roll  = std::atan2(R[5], R[8]);
+    // ZYX (Yaw-Pitch-Roll) order. minus was added by Qualot to match apparent rotation. 
+    double yaw   = -std::atan2(R[1], R[0]);
+    double pitch = -std::asin(-R[2]);
+    double roll  = -std::atan2(R[5], R[8]);
 
     // round to 4 decimal places for cleaner JSON output
     auto round4 = [](double val) { return std::round(val * 10000.0) / 10000.0; };
@@ -298,7 +298,6 @@ std::vector<double> SimulationManager::serializeQposRPYTheta()
 
     std::vector<double> result;
 
-    // Lambda for rounding values to 4 decimal places
     auto round4 = [](double val) { return std::round(val * 10000.0) / 10000.0; };
 
     for (int jid = 0; jid < m->njnt; jid++)
@@ -308,37 +307,20 @@ std::vector<double> SimulationManager::serializeQposRPYTheta()
 
         if (jtype == mjJNT_FREE || jtype == mjJNT_BALL)
         {
-            // For free or ball joints, extract quaternion
             const mjtNum* quat;
             if (jtype == mjJNT_FREE)
-                quat = d->qpos + start + 3; // free joint: first 3 are position, next 4 are quaternion
+                quat = d->qpos + start + 3;
             else
-                quat = d->qpos + start;     // ball joint: quaternion only
+                quat = d->qpos + start;
 
-            // Convert quaternion to rotation matrix
-            mjtNum R[9];
-            mju_quat2Mat(R, quat);
+            // calling quat2rpy_zyx
+            std::vector<double> rpy = quat2rpy_zyx(quat);
 
-            // Convert rotation matrix to ZYX (Yaw-Pitch-Roll) Euler angles
-            mjtNum euler[3];
-            euler[0] = std::atan2(R[5], R[8]);  // roll (X-axis)
-            euler[1] = std::asin(-R[2]);        // pitch (Y-axis)
-            euler[2] = std::atan2(R[1], R[0]);  // yaw (Z-axis)
-
-            // Append RPY to result vector
-            result.push_back(round4(euler[0]));
-            result.push_back(round4(euler[1]));
-            result.push_back(round4(euler[2]));
+            result.insert(result.end(), rpy.begin(), rpy.end());
         }
         else if (jtype == mjJNT_HINGE || jtype == mjJNT_SLIDE)
         {
-            // For hinge or slide joints, append scalar qpos
             result.push_back(round4(d->qpos[start]));
-        }
-        else
-        {
-            // For other joint types, you may skip or append 0.0
-            // result.push_back(0.0);
         }
     }
 
