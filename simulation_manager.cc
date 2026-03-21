@@ -74,6 +74,53 @@ std::vector<double> SimulationManager::processTenJ(int rows, int cols, int start
     return result;
 }
 
+// --- Process tendon Jacobian: slice and flatten ---
+std::vector<double> SimulationManager::processTenJFiltered()
+{
+    mjModel* m = viewer.model();
+    mjData*  d = viewer.data();
+
+    int rows = m->ntendon;
+    int cols = m->nv;
+
+    std::vector<double> result;
+    std::vector<int> keep_cols;
+
+    for (int jid = 0; jid < m->njnt; jid++)
+    {
+        int dof_start = m->jnt_dofadr[jid];
+        int dof_num = 0;
+
+        // Determine DOFs based on joint type
+        switch (m->jnt_type[jid])
+        {
+            case mjJNT_FREE:  dof_num = 6; break;
+            case mjJNT_BALL:  dof_num = 3; break;
+            case mjJNT_HINGE: dof_num = 1; break;
+            case mjJNT_SLIDE: dof_num = 1; break;
+        }
+
+        if (m->jnt_type[jid] == mjJNT_FREE)
+        {
+            // Skip first 3 columns:translation
+            for (int k = 3; k < dof_num; k++)
+                keep_cols.push_back(dof_start + k);
+        }
+        else
+        {
+            for (int k = 0; k < dof_num; k++)
+                keep_cols.push_back(dof_start + k);
+        }
+    }
+
+    // Making filtered jacobi matrix
+    for (int j : keep_cols)
+        for (int i = 0; i < rows; i++)
+            result.push_back(round4(d->ten_J[i*cols + j]));
+
+    return result;
+}
+
 // Serialize simulation state into JSON and convert to byte vector
 std::vector<uint8_t> SimulationManager::serializeData() {
     mjData* d = viewer.data();
@@ -94,6 +141,7 @@ std::vector<uint8_t> SimulationManager::serializeData() {
     j["joint_qvel_ids"] = joint_qvel_ids;
     j["length"] = std::vector<double>(d->ten_length, d->ten_length + tendon_names.size());
     j["ten_J_processed"] = processTenJ(tendon_names.size(), m->nv, joint_qvel_ids[0]);
+    j["ten_J_processed_filtered"] = processTenJFiltered();
 
     // --- joint_qpos / joint_qvel ---
     std::vector<double> joint_qpos_values(joint_qpos_ids.size());
@@ -373,6 +421,7 @@ std::vector<double> SimulationManager::serializeQvelRPYTheta()
 
     return result;
 }
+
 
 // Return whether the viewer window should close
 bool SimulationManager::shouldClose() const {

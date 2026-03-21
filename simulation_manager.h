@@ -40,6 +40,8 @@ private:
     std::vector<std::string> tendon_names;
 
     std::vector<double> processTenJ(int rows, int cols, int start_id);
+    std::vector<double> processTenJFiltered();
+
     std::vector<uint8_t> serializeData();
     void initializeIds();
     void loadModelNames();
