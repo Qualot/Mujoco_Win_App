@@ -70,19 +70,27 @@ std::vector<uint8_t> SimulationManager::serializeData() {
     nlohmann::json j;
     j["sim_time"] = d->time;
     j["joint_names"] = joint_names;
-    j["joint_names_rpy"] = joint_names_rpy;
+    //j["joint_names_rpy"] = joint_names_rpy;
     j["tendon_names"] = tendon_names;
-    j["qpos"] = std::vector<double>(d->qpos, d->qpos + m->nq);
-    j["qpos_per_joint"] = serializeJointQposPerJoint();
-    j["joint_rpy"] = serializeJointRPY();
+    //j["qpos"] = std::vector<double>(d->qpos, d->qpos + m->nq);
+    //j["qpos_per_joint"] = serializeJointQposPerJoint();
+    //j["joint_rpy"] = serializeJointRPY();
     j["qpos_rpy_theta_l"] = serializeQposRPYTheta();
-    j["qvel"] = std::vector<double>(d->qvel, d->qvel + m->nv);
+    //j["qvel"] = std::vector<double>(d->qvel, d->qvel + m->nv);
     j["qvel_rpy_theta_l"] = serializeQvelRPYTheta();
     j["joint_qpos_ids"] = joint_qpos_ids;
     j["joint_qvel_ids"] = joint_qvel_ids;
     j["length"] = std::vector<double>(d->ten_length, d->ten_length + tendon_names.size());
     j["ten_J_raw"] = processTenJ(tendon_names.size(), m->nv, joint_qvel_ids[0]);
-    j["ten_J_wo_free_translation"] = processTenJFiltered();
+
+    //NG
+    j["ten_J_filtered"] = processTenJFiltered();
+    //j["ten_J_filtered"] = j["ten_J_raw"];
+
+    //OK
+    //j["ten_J_filtered"] = joint_qvel_ids;
+    //j["ten_J_filtered"] = tendon_names;
+
 
     // --- joint_qpos / joint_qvel ---
     std::vector<double> joint_qpos_values(joint_qpos_ids.size());
