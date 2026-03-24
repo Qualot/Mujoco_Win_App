@@ -345,9 +345,9 @@ std::vector<double> SimulationManager::serializeQvelRPYTheta()
         {
             // free joint: first 3 linear velocities, next 3 angular velocities
             // We only take angular velocity (RPY rates)
-            result.push_back(round4(d->qvel[qvel_start + 0])); // roll rate
-            result.push_back(round4(d->qvel[qvel_start + 1])); // pitch rate
-            result.push_back(round4(d->qvel[qvel_start + 2])); // yaw rate
+            result.push_back(round4(d->qvel[qvel_start + 3])); // roll rate
+            result.push_back(round4(d->qvel[qvel_start + 4])); // pitch rate
+            result.push_back(round4(d->qvel[qvel_start + 5])); // yaw rate
         }
         else if (jtype == mjJNT_BALL)
         {
