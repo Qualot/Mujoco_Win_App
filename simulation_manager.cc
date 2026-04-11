@@ -12,6 +12,10 @@ inline double round4(double val) {
     return std::round(val * 10000.0) / 10000.0;
 }
 
+inline bool isIgnoredJoint(const char* name) {
+    return name && std::string(name).find("ignore") != std::string::npos;
+}
+
 // Constructor initializes viewer, UDP sender, and UDP receiver
 SimulationManager::SimulationManager(const char* modelFile,
                                      const std::string& sendIp,
@@ -121,28 +125,42 @@ std::vector<uint8_t> SimulationManager::serializeData() {
 void SimulationManager::initializeIds() {
     mjModel* m = viewer.model();
 
-    // --- Initialize joints ---
+    // Clear all ID containers to avoid stale data
+    joint_ids.clear();
+    joint_qpos_ids.clear();
+    joint_qvel_ids.clear();
+    tendon_ids.clear();
+    actuator_ids.clear();
+    tension_sensor_ids.clear();
+
+    // --- Initialize joints (based on filtered joint_names) ---
     for (const auto& name : joint_names) {
+
+        // Safety guard (ensures consistency even if joint_names changes in the future)
+        if (isIgnoredJoint(name.c_str())) continue;
+
         int jid = mj_name2id(m, mjOBJ_JOINT, name.c_str());
+
         joint_ids.push_back(jid);
         joint_qpos_ids.push_back(jid >= 0 ? m->jnt_qposadr[jid] : -1);
         joint_qvel_ids.push_back(jid >= 0 ? m->jnt_dofadr[jid] : -1);
     }
 
-    // --- Initialize tendons, actuators, and corresponding tension sensors ---
+    // --- Initialize tendons, actuators, and sensors ---
     for (const auto& name : tendon_names) {
+
         // Tendon ID
         tendon_ids.push_back(mj_name2id(m, mjOBJ_TENDON, name.c_str()));
 
         // Actuator ID
         actuator_ids.push_back(mj_name2id(m, mjOBJ_ACTUATOR, name.c_str()));
 
-        // Corresponding tendon actuator force sensor ID
+        // Corresponding tendon actuator force sensor
         int sid = mj_name2id(m, mjOBJ_SENSOR, name.c_str());
         if (sid >= 0 && m->sensor_type[sid] == mjSENS_TENDONACTFRC) {
             tension_sensor_ids.push_back(m->sensor_adr[sid]);
         } else {
-            tension_sensor_ids.push_back(-1); // sensor not found
+            tension_sensor_ids.push_back(-1);
         }
     }
 }
@@ -151,39 +169,35 @@ void SimulationManager::initializeIds() {
 void SimulationManager::loadModelNames()
 {
     mjModel* m = viewer.model();
+
     joint_names.clear();
     joint_names_rpy.clear();
     tendon_names.clear();
 
-    // joints
+    // --- Load joint names (excluding ignored joints) ---
     for (int i = 0; i < m->njnt; i++) {
         const char* name = mj_id2name(m, mjOBJ_JOINT, i);
-        if (name) {
-            joint_names.emplace_back(name);
+        if (!name) continue;
 
-            int jtype = m->jnt_type[i];
-            if (jtype == mjJNT_FREE) {
-                // joint_names_rpy.push_back(std::string(name) + "_tx");
-                // joint_names_rpy.push_back(std::string(name) + "_ty");
-                // joint_names_rpy.push_back(std::string(name) + "_tz");
-                joint_names_rpy.push_back(std::string(name) + "_rx");
-                joint_names_rpy.push_back(std::string(name) + "_ry");
-                joint_names_rpy.push_back(std::string(name) + "_rz");
-            }
-            else if (jtype == mjJNT_BALL) {
-                joint_names_rpy.push_back(std::string(name) + "_rx");
-                joint_names_rpy.push_back(std::string(name) + "_ry");
-                joint_names_rpy.push_back(std::string(name) + "_rz");
-            }else
-            {
-                joint_names_rpy.push_back(std::string(name));
-            }
+        // Skip joints marked as "ignore"
+        if (isIgnoredJoint(name)) continue;
 
+        std::string jname(name);
+        joint_names.emplace_back(jname);
 
+        int jtype = m->jnt_type[i];
+
+        // Expand free/ball joints into RPY components
+        if (jtype == mjJNT_FREE || jtype == mjJNT_BALL) {
+            joint_names_rpy.push_back(jname + "_rx");
+            joint_names_rpy.push_back(jname + "_ry");
+            joint_names_rpy.push_back(jname + "_rz");
+        } else {
+            joint_names_rpy.push_back(jname);
         }
     }
 
-    // tendons
+    // --- Load tendon names ---
     for (int i = 0; i < m->ntendon; i++) {
         const char* name = mj_id2name(m, mjOBJ_TENDON, i);
         if (name) {
@@ -191,18 +205,21 @@ void SimulationManager::loadModelNames()
         }
     }
 
-    
+    // --- Debug print ---
     std::printf("joint: ");
     for (auto& j : joint_names)
         std::printf("%s, ", j.c_str());
-
     std::printf("\n");
+
+    std::printf("joint_rpy: ");
+    for (auto& j : joint_names_rpy)
+        std::printf("%s, ", j.c_str());
+    std::printf("\n");
+
     std::printf("tendon: ");
     for (auto& t : tendon_names)
         std::printf("%s, ", t.c_str());
-
     std::printf("\n\n");
-
 }
 
 // Serialize joint qpos values per joint into JSON object with joint names as keys
@@ -295,28 +312,37 @@ std::vector<double> SimulationManager::serializeQposRPYTheta()
 
     std::vector<double> result;
 
+    // Utility for rounding values
     auto round4 = [](double val) { return std::round(val * 10000.0) / 10000.0; };
 
     for (int jid = 0; jid < m->njnt; jid++)
     {
+        const char* name = mj_id2name(m, mjOBJ_JOINT, jid);
+        if (!name) continue;
+
+        // Skip ignored joints
+        if (isIgnoredJoint(name)) continue;
+
         int jtype = m->jnt_type[jid];
         int start = m->jnt_qposadr[jid];
 
         if (jtype == mjJNT_FREE || jtype == mjJNT_BALL)
         {
+            // Extract quaternion
             const mjtNum* quat;
             if (jtype == mjJNT_FREE)
-                quat = d->qpos + start + 3;
+                quat = d->qpos + start + 3;  // skip translation part
             else
                 quat = d->qpos + start;
 
-            // calling quat2rpy_zyx
+            // Convert quaternion to RPY (ZYX convention)
             std::vector<double> rpy = quat2rpy_zyx(quat);
 
             result.insert(result.end(), rpy.begin(), rpy.end());
         }
         else if (jtype == mjJNT_HINGE || jtype == mjJNT_SLIDE)
         {
+            // Scalar joint value
             result.push_back(round4(d->qpos[start]));
         }
     }
@@ -332,39 +358,43 @@ std::vector<double> SimulationManager::serializeQvelRPYTheta()
 
     std::vector<double> result;
 
-    // Lambda for rounding values to 4 decimal places
+    // Utility for rounding values
     auto round4 = [](double val) { return std::round(val * 10000.0) / 10000.0; };
 
     for (int jid = 0; jid < m->njnt; jid++)
     {
+        const char* name = mj_id2name(m, mjOBJ_JOINT, jid);
+        if (!name) continue;
+
+        // --- Skip ignored joints (must match qpos logic) ---
+        if (isIgnoredJoint(name)) continue;
+
         int jtype = m->jnt_type[jid];
-        int qpos_start = m->jnt_qposadr[jid];
         int qvel_start = m->jnt_dofadr[jid];
 
         if (jtype == mjJNT_FREE)
         {
-            // free joint: first 3 linear velocities, next 3 angular velocities
-            // We only take angular velocity (RPY rates)
+            // Free joint: first 3 = linear velocity, next 3 = angular velocity
+            // Only angular part is used (RPY rates)
             result.push_back(round4(d->qvel[qvel_start + 3])); // roll rate
             result.push_back(round4(d->qvel[qvel_start + 4])); // pitch rate
             result.push_back(round4(d->qvel[qvel_start + 5])); // yaw rate
         }
         else if (jtype == mjJNT_BALL)
         {
-            // ball joint: 3 angular velocity DOF
+            // Ball joint: 3 angular velocity DOFs
             result.push_back(round4(d->qvel[qvel_start + 0]));
             result.push_back(round4(d->qvel[qvel_start + 1]));
             result.push_back(round4(d->qvel[qvel_start + 2]));
         }
         else if (jtype == mjJNT_HINGE || jtype == mjJNT_SLIDE)
         {
-            // scalar joint velocity
+            // Scalar joint velocity
             result.push_back(round4(d->qvel[qvel_start]));
         }
         else
         {
-            // other joint types: optional skip or zero
-            // result.push_back(0.0);
+            // Other joint types are ignored (if any)
         }
     }
 
@@ -398,6 +428,12 @@ std::vector<double> SimulationManager::processTenJFiltered()
 
     for (int jid = 0; jid < m->njnt; jid++)
     {
+        const char* name = mj_id2name(m, mjOBJ_JOINT, jid);
+        if (!name) continue;
+
+        // --- Skip ignored joints (must match qpos/qvel logic) ---
+        if (isIgnoredJoint(name)) continue;
+
         int dof_start = m->jnt_dofadr[jid];
         int dof_num = 0;
 
@@ -408,25 +444,31 @@ std::vector<double> SimulationManager::processTenJFiltered()
             case mjJNT_BALL:  dof_num = 3; break;
             case mjJNT_HINGE: dof_num = 1; break;
             case mjJNT_SLIDE: dof_num = 1; break;
+            default: continue; // Skip unsupported joint types
         }
 
         if (m->jnt_type[jid] == mjJNT_FREE)
         {
-            // Skip first 3 columns:translation
+            // Skip first 3 DOFs (translation), keep only rotational part
             for (int k = 3; k < dof_num; k++)
                 keep_cols.push_back(dof_start + k);
         }
         else
         {
+            // Keep all DOFs for non-free joints
             for (int k = 0; k < dof_num; k++)
                 keep_cols.push_back(dof_start + k);
         }
     }
 
-    // Making filtered jacobi matrix
+    // --- Build filtered tendon Jacobian (column-major flattening) ---
     for (int j : keep_cols)
+    {
         for (int i = 0; i < rows; i++)
-            result.push_back(round4(d->ten_J[i*cols + j]));
+        {
+            result.push_back(round4(d->ten_J[i * cols + j]));
+        }
+    }
 
     return result;
 }
