@@ -88,8 +88,8 @@ std::vector<uint8_t> SimulationManager::serializeData() {
     j["ten_J_raw"] = processTenJ(tendon_names.size(), m->nv, joint_qvel_ids[0]);
 
     //NG without topic elimination
-    j["ten_J_wo_ignore"] = processTenJFiltered(true);   //With float translation. For observation.
-    j["ten_J_filtered"] = processTenJFiltered(false);   //Without float translation. For control input. 
+    j["ten_J_twist"] = processTenJFiltered(true);   //With float translation. For observation.
+    j["ten_J_rpy"] = processTenJFiltered(false);   //Without float translation. For control input. 
     //j["ten_J_filtered"] = j["ten_J_raw"];
 
     //OK
