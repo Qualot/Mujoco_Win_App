@@ -88,7 +88,8 @@ std::vector<uint8_t> SimulationManager::serializeData() {
     j["ten_J_raw"] = processTenJ(tendon_names.size(), m->nv, joint_qvel_ids[0]);
 
     //NG without topic elimination
-    j["ten_J_filtered"] = processTenJFiltered();
+    j["ten_J_wo_ignore"] = processTenJFiltered(true);   //With float translation. For observation.
+    j["ten_J_filtered"] = processTenJFiltered(false);   //Without float translation. For control input. 
     //j["ten_J_filtered"] = j["ten_J_raw"];
 
     //OK
@@ -415,7 +416,7 @@ std::vector<double> SimulationManager::processTenJ(int rows, int cols, int start
 }
 
 // --- Process tendon Jacobian: slice and flatten ---
-std::vector<double> SimulationManager::processTenJFiltered()
+std::vector<double> SimulationManager::processTenJFiltered(bool include_translation)
 {
     mjModel* m = viewer.model();
     mjData*  d = viewer.data();
@@ -449,9 +450,18 @@ std::vector<double> SimulationManager::processTenJFiltered()
 
         if (m->jnt_type[jid] == mjJNT_FREE)
         {
-            // Skip first 3 DOFs (translation), keep only rotational part
-            for (int k = 3; k < dof_num; k++)
-                keep_cols.push_back(dof_start + k);
+            if (include_translation)
+            {
+                // Use all 6 DOFs (translation + rotation)
+                for (int k = 0; k < dof_num; k++)
+                    keep_cols.push_back(dof_start + k);
+            }
+            else
+            {
+                // Use only rotational DOFs (skip translation)
+                for (int k = 3; k < dof_num; k++)
+                    keep_cols.push_back(dof_start + k);
+            }
         }
         else
         {
