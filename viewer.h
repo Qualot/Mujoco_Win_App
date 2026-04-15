@@ -11,22 +11,18 @@ public:
 
     // ======== Public API for external use ========
 
-    // Step the simulation for the given timestep (default: 1/60 sec)
+    // Step the simulation for the given timestep
     void stepSimulation(double timestep = 1.0/60.0);
 
     // Render the current scene
     void render();
 
-    // Process pending events (keyboard, mouse, window close)
+    // Process pending events
     void pollEvents();
 
-    // Reset simulation to keyframe 0
+    // Reset methods
     void reset();
-
-    // Reset simulation to keyframe 0
     void resetHigh();
-
-    // Reset simulation to keyframe 1
     void resetLow();
 
     // Check if window should close
@@ -36,8 +32,8 @@ public:
     mjData* data();
     mjModel* model();
 
-    // Pause flag (checked from SimulationManager)
-    bool paused = false;   // toggle with 'p'
+    // Pause flag
+    bool paused = false;
 
 private:
     // MuJoCo structures
@@ -47,6 +43,7 @@ private:
     mjvOption opt;
     mjvScene scn;
     mjrContext con;
+    mjvPerturb pert;        // Added: For mouse-based interaction/selection
 
     // GLFW window
     GLFWwindow* window = nullptr;
@@ -57,6 +54,7 @@ private:
     bool button_right  = false;
     double lastx = 0;
     double lasty = 0;
+    double last_click_time = 0; // Added: For double-click detection
 
     // ======== GLFW static callbacks ========
     static void keyboardCallback(GLFWwindow* window, int key, int scancode, int act, int mods);

@@ -33,6 +33,7 @@ Viewer::Viewer(const char* filename) {
     mjv_defaultOption(&opt);
     mjv_defaultScene(&scn);
     mjr_defaultContext(&con);
+    mjv_defaultPerturb(&pert); // Added: Initialize perturbation structure
 
     mjv_makeScene(m, &scn, 2000);
     mjr_makeContext(m, &con, mjFONTSCALE_150);
@@ -58,11 +59,14 @@ Viewer::~Viewer() {
 // ======== Public API ========
 
 void Viewer::stepSimulation(double timestep) {
-    // Do not advance simulation when paused
     if (paused) return;
 
     mjtNum simstart = d->time;
     while (d->time - simstart < timestep) {
+        // Apply perturbation forces to mjData before stepping
+        mjv_applyPerturbPose(m, d, &pert, 0);
+        mjv_applyPerturbForce(m, d, &pert);
+        
         mj_step(m, d);
     }
 }
@@ -70,7 +74,10 @@ void Viewer::stepSimulation(double timestep) {
 void Viewer::render() {
     mjrRect viewport = {0, 0, 0, 0};
     glfwGetFramebufferSize(window, &viewport.width, &viewport.height);
-    mjv_updateScene(m, d, &opt, NULL, &cam, mjCAT_ALL, &scn);
+
+    // Update scene with perturbation state (handles highlights)
+    mjv_updateScene(m, d, &opt, &pert, &cam, mjCAT_ALL, &scn);
+    
     mjr_render(viewport, &scn, &con);
     glfwSwapBuffers(window);
 }
@@ -126,20 +133,14 @@ void Viewer::scrollCallback(GLFWwindow* window, double xoffset, double yoffset) 
 // ======== Instance event handlers ========
 
 void Viewer::onKeyboard(int key, int act) {
-    if (act==GLFW_PRESS && key==GLFW_KEY_BACKSPACE) {
-        reset();
-    }
-    if (act==GLFW_PRESS && key==GLFW_KEY_H) {
-        resetHigh();
-    }
-    if (act==GLFW_PRESS && key==GLFW_KEY_L) {
-        resetLow();
-    }
-    if (act==GLFW_PRESS && key==GLFW_KEY_P) {   // Toggle pause
+    if (act==GLFW_PRESS && key==GLFW_KEY_BACKSPACE) reset();
+    if (act==GLFW_PRESS && key==GLFW_KEY_H) resetHigh();
+    if (act==GLFW_PRESS && key==GLFW_KEY_L) resetLow();
+    if (act==GLFW_PRESS && key==GLFW_KEY_P) {
         paused = !paused;
         std::printf("Paused: %s\n", paused ? "ON" : "OFF");
     }
-    if (act==GLFW_PRESS && key==GLFW_KEY_O) {   // Single-step when paused
+    if (act==GLFW_PRESS && key==GLFW_KEY_O) {
         mj_step(m, d);
         std::printf("One step advanced\n");
     }
@@ -149,6 +150,43 @@ void Viewer::onMouseButton(int button, int act) {
     button_left   = (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT)   == GLFW_PRESS);
     button_middle = (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_MIDDLE) == GLFW_PRESS);
     button_right  = (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT)  == GLFW_PRESS);
+
+    // Double-click detection
+    if (act == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_LEFT) {
+        double now = glfwGetTime();
+        if (now - last_click_time < 0.3) {
+            mjrRect viewport = {0, 0, 0, 0};
+            glfwGetFramebufferSize(window, &viewport.width, &viewport.height);
+
+            // Variables to receive selection details
+            int geomid = -1;
+            int flexid = -1;
+            int skinid = -1;
+            mjtNum selpnt[3];
+
+            // Standard 11-argument call for MuJoCo 3.x
+            // Returns the ID of the selected body
+            int bodyid = mjv_select(m, d, &opt, 
+                                    (mjtNum)viewport.width / viewport.height, 
+                                    (mjtNum)lastx / viewport.width, 
+                                    (mjtNum)(viewport.height - lasty) / viewport.height, 
+                                    &scn, selpnt, &geomid, &flexid, &skinid);
+            
+            if (bodyid >= 0) {
+                // Set perturbation targets
+                pert.active = bodyid; // Correct member name: 'active'
+                pert.select = bodyid; // Correct member name: 'select'
+                
+                // Initialize perturbation based on selection point
+                mjv_initPerturb(m, d, &scn, &pert);
+            } else {
+                // Reset if nothing selected
+                pert.active = 0;
+            }
+        }
+        last_click_time = now;
+    }
+
     glfwGetCursorPos(window, &lastx, &lasty);
 }
 
@@ -163,19 +201,29 @@ void Viewer::onMouseMove(double xpos, double ypos) {
     int width, height;
     glfwGetWindowSize(window, &width, &height);
 
-    bool mod_shift = (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT)==GLFW_PRESS ||
-                      glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT)==GLFW_PRESS);
+    bool mod_ctrl  = (glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS ||
+                      glfwGetKey(window, GLFW_KEY_RIGHT_CONTROL) == GLFW_PRESS);
+    bool mod_shift = (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS ||
+                      glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT) == GLFW_PRESS);
 
-    mjtMouse action;
-    if (button_right) {
-        action = mod_shift ? mjMOUSE_MOVE_H : mjMOUSE_MOVE_V;
-    } else if (button_left) {
-        action = mod_shift ? mjMOUSE_ROTATE_H : mjMOUSE_ROTATE_V;
-    } else {
-        action = mjMOUSE_ZOOM;
+    // Perturbation logic: check if a body is active and Ctrl is pressed
+    if (mod_ctrl && pert.active > 0) {
+        mjtMouse action_pert;
+        if (button_right)      action_pert = mjMOUSE_MOVE_V;   // Translation
+        else if (button_left)  action_pert = mjMOUSE_ROTATE_V; // Rotation
+        else                   action_pert = mjMOUSE_ZOOM;
+
+        mjv_movePerturb(m, d, action_pert, dx/height, dy/height, &scn, &pert);
+    } 
+    // Standard Camera logic
+    else {
+        mjtMouse action_cam;
+        if (button_right)      action_cam = mod_shift ? mjMOUSE_MOVE_H : mjMOUSE_MOVE_V;
+        else if (button_left)  action_cam = mod_shift ? mjMOUSE_ROTATE_H : mjMOUSE_ROTATE_V;
+        else                   action_cam = mjMOUSE_ZOOM;
+
+        mjv_moveCamera(m, action_cam, dx/height, dy/height, &scn, &cam);
     }
-
-    mjv_moveCamera(m, action, dx/height, dy/height, &scn, &cam);
 }
 
 void Viewer::onScroll(double yoffset) {
