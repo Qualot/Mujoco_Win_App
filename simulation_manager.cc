@@ -85,7 +85,7 @@ std::vector<uint8_t> SimulationManager::serializeData() {
     j["joint_qpos_ids"] = joint_qpos_ids;
     j["joint_qvel_ids"] = joint_qvel_ids;
     j["length"] = std::vector<double>(d->ten_length, d->ten_length + tendon_names.size());
-    j["ten_J_raw"] = processTenJ(tendon_names.size(), m->nv, joint_qvel_ids[0]);
+    //j["ten_J_raw"] = processTenJ(tendon_names.size(), m->nv, joint_qvel_ids[0]);
 
     //NG without topic elimination
     j["ten_J_twist"] = processTenJFiltered(true);   //With float translation. For observation.
