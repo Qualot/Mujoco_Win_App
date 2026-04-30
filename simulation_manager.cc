@@ -16,6 +16,10 @@ inline bool isIgnoredJoint(const char* name) {
     return name && std::string(name).find("ignore") != std::string::npos;
 }
 
+inline bool isIgnoredLigament(const char* name) {
+    return name && std::string(name).find("lig_") != std::string::npos;
+}
+
 // Constructor initializes viewer, UDP sender, and UDP receiver
 SimulationManager::SimulationManager(const char* modelFile,
                                      const std::string& sendIp,
@@ -84,7 +88,8 @@ std::vector<uint8_t> SimulationManager::serializeData() {
     j["qvel_rpy_theta_l"] = serializeQvelRPYTheta();
     j["joint_qpos_ids"] = joint_qpos_ids;
     j["joint_qvel_ids"] = joint_qvel_ids;
-    j["length"] = std::vector<double>(d->ten_length, d->ten_length + tendon_names.size());
+    //j["length"] = std::vector<double>(d->ten_length, d->ten_length + tendon_names.size());
+    j["length"] = serializeTendonLengths();
     //j["ten_J_raw"] = processTenJ(tendon_names.size(), m->nv, joint_qvel_ids[0]);
 
     //NG without topic elimination
@@ -118,8 +123,9 @@ std::vector<uint8_t> SimulationManager::serializeData() {
     }
     j["tension"] = tension_values;  // store as array in JSON
 
-    std::string s = j.dump();
-    return std::vector<uint8_t>(s.begin(), s.end());
+    // std::string s = j.dump();
+    // return std::vector<uint8_t>(s.begin(), s.end());
+    return nlohmann::json::to_msgpack(j);
 }
 
 // Initialize joint, tendon, actuator, and sensor IDs
@@ -201,7 +207,7 @@ void SimulationManager::loadModelNames()
     // --- Load tendon names ---
     for (int i = 0; i < m->ntendon; i++) {
         const char* name = mj_id2name(m, mjOBJ_TENDON, i);
-        if (name) {
+        if (name && !isIgnoredLigament(name)) {
             tendon_names.emplace_back(name);
         }
     }
@@ -402,6 +408,29 @@ std::vector<double> SimulationManager::serializeQvelRPYTheta()
     return result;
 }
 
+std::vector<double> SimulationManager::serializeTendonLengths()
+{
+    mjModel* m = viewer.model();
+    mjData* d = viewer.data();
+
+    std::vector<double> filtered_lengths;
+
+    for (int i = 0; i < m->ntendon; i++)
+    {
+        const char* name = mj_id2name(m, mjOBJ_TENDON, i);
+        
+        // eliminate ligaments if their names contain "lig_"
+        if (isIgnoredLigament(name)) {
+            continue;
+        }
+
+        // add tendon length to output vector
+        filtered_lengths.push_back(round4(d->ten_length[i]));
+    }
+
+    return filtered_lengths;
+}
+
 
 // Process tendon Jacobian: slice and flatten
 std::vector<double> SimulationManager::processTenJ(int rows, int cols, int start_id) {
@@ -421,7 +450,6 @@ std::vector<double> SimulationManager::processTenJFiltered(bool include_translat
     mjModel* m = viewer.model();
     mjData*  d = viewer.data();
 
-    int rows = m->ntendon;
     int cols = m->nv;
 
     std::vector<double> result;
@@ -474,8 +502,10 @@ std::vector<double> SimulationManager::processTenJFiltered(bool include_translat
     // --- Build filtered tendon Jacobian (column-major flattening) ---
     for (int j : keep_cols)
     {
-        for (int i = 0; i < rows; i++)
+        for (int i = 0; i < m->ntendon; i++)
         {
+            const char* tname = mj_id2name(m, mjOBJ_TENDON, i);
+            if (isIgnoredLigament(tname)) continue; // Skip ligaments if needed
             result.push_back(round4(d->ten_J[i * cols + j]));
         }
     }

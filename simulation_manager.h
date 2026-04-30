@@ -50,4 +50,5 @@ private:
     nlohmann::json serializeJointRPY();
     std::vector<double> serializeQposRPYTheta();
     std::vector<double> serializeQvelRPYTheta();
+    std::vector<double> serializeTendonLengths();
 };
