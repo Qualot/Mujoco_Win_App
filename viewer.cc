@@ -213,7 +213,7 @@ void Viewer::onMouseMove(double xpos, double ypos) {
         else if (button_left)  action_pert = mjMOUSE_ROTATE_V; // Rotation
         else                   action_pert = mjMOUSE_ZOOM;
 
-        mjv_movePerturb(m, d, action_pert, dx/height, dy/height, &scn, &pert);
+        mjv_movePerturb(m, d, action_pert, dx/height * 10, dy/height * 10, &scn, &pert);
     } 
     // Standard Camera logic
     else {
