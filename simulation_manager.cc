@@ -123,8 +123,9 @@ std::vector<uint8_t> SimulationManager::serializeData() {
     }
     j["tension"] = tension_values;  // store as array in JSON
 
-    std::string s = j.dump();
-    return std::vector<uint8_t>(s.begin(), s.end());
+    // std::string s = j.dump();
+    // return std::vector<uint8_t>(s.begin(), s.end());
+    return nlohmann::json::to_msgpack(j);
 }
 
 // Initialize joint, tendon, actuator, and sensor IDs
