@@ -33,7 +33,7 @@ private:
     std::vector<int> joint_qpos_ids;
     std::vector<int> joint_qvel_ids;
 
-    std::vector<int> tension_sensor_ids;  // Tendon actuator force sensor indices in sensordata
+    std::vector<int> tendon_tension_ids;  // Tendon actuator force sensor indices in sensordata
 
     std::vector<std::string> joint_names;
     std::vector<std::string> joint_names_rpy; // expand free joints and ball joints into separate roll/pitch/yaw entries

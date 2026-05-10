@@ -79,7 +79,8 @@ std::vector<uint8_t> SimulationManager::serializeData() {
     j["sim_time"] = d->time;
     j["joint_names"] = joint_names;
     //j["joint_names_rpy"] = joint_names_rpy;
-    j["tendon_names"] = tendon_names;
+    // j["tendon_names"] = tendon_names;
+
     //j["qpos"] = std::vector<double>(d->qpos, d->qpos + m->nq);
     //j["qpos_per_joint"] = serializeJointQposPerJoint();
     //j["joint_rpy"] = serializeJointRPY();
@@ -113,19 +114,19 @@ std::vector<uint8_t> SimulationManager::serializeData() {
     j["joint_qvel"] = joint_qvel_values;
 
     // --- tendon actuator force (tension) ---
-    std::vector<double> tension_values(tension_sensor_ids.size());
-    for (size_t i = 0; i < tension_sensor_ids.size(); i++) {
-        if (tension_sensor_ids[i] >= 0) {
-            tension_values[i] = round4(d->sensordata[tension_sensor_ids[i]]);
+    std::vector<double> tension_values(tendon_tension_ids.size());
+    for (size_t i = 0; i < tendon_tension_ids.size(); i++) {
+        if (tendon_tension_ids[i] >= 0) {
+            tension_values[i] = round4(d->sensordata[tendon_tension_ids[i]]);
         } else {
             tension_values[i] = 0.0; // sensor not found
         }
     }
     j["tension"] = tension_values;  // store as array in JSON
 
-    // std::string s = j.dump();
-    // return std::vector<uint8_t>(s.begin(), s.end());
-    return nlohmann::json::to_msgpack(j);
+    std::string s = j.dump();
+    return std::vector<uint8_t>(s.begin(), s.end());
+    // return nlohmann::json::to_msgpack(j);
 }
 
 // Initialize joint, tendon, actuator, and sensor IDs
@@ -138,7 +139,7 @@ void SimulationManager::initializeIds() {
     joint_qvel_ids.clear();
     tendon_ids.clear();
     actuator_ids.clear();
-    tension_sensor_ids.clear();
+    tendon_tension_ids.clear();
 
     // --- Initialize joints (based on filtered joint_names) ---
     for (const auto& name : joint_names) {
@@ -165,9 +166,9 @@ void SimulationManager::initializeIds() {
         // Corresponding tendon actuator force sensor
         int sid = mj_name2id(m, mjOBJ_SENSOR, name.c_str());
         if (sid >= 0 && m->sensor_type[sid] == mjSENS_TENDONACTFRC) {
-            tension_sensor_ids.push_back(m->sensor_adr[sid]);
+            tendon_tension_ids.push_back(m->sensor_adr[sid]);
         } else {
-            tension_sensor_ids.push_back(-1);
+            tendon_tension_ids.push_back(-1);
         }
     }
 }
