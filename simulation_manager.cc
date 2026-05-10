@@ -114,15 +114,26 @@ std::vector<uint8_t> SimulationManager::serializeData() {
     j["joint_qvel"] = joint_qvel_values;
 
     // --- tendon actuator force (tension) ---
-    std::vector<double> tension_values(tendon_tension_ids.size());
+    std::vector<double> tendon_tension_values(tendon_tension_ids.size());
     for (size_t i = 0; i < tendon_tension_ids.size(); i++) {
         if (tendon_tension_ids[i] >= 0) {
-            tension_values[i] = round4(d->sensordata[tendon_tension_ids[i]]);
+            tendon_tension_values[i] = round4(d->sensordata[tendon_tension_ids[i]]);
         } else {
-            tension_values[i] = 0.0; // sensor not found
+            tendon_tension_values[i] = 0.0; // sensor not found
         }
     }
-    j["tension"] = tension_values;  // store as array in JSON
+    j["tension"] = tendon_tension_values;  // store as array in JSON
+
+    // --- ligament limit force (tension) ---
+    std::vector<double> ligament_tension_values(ligament_tension_ids.size());
+    for (size_t i = 0; i < ligament_tension_ids.size(); i++) {
+        if (ligament_tension_ids[i] >= 0) {
+            ligament_tension_values[i] = round4(d->sensordata[ligament_tension_ids[i]]);
+        } else {
+            ligament_tension_values[i] = 0.0; // sensor not found
+        }
+    }
+    j["ligament_tension"] = ligament_tension_values;  // store as array in JSON
 
     std::string s = j.dump();
     return std::vector<uint8_t>(s.begin(), s.end());
@@ -140,6 +151,7 @@ void SimulationManager::initializeIds() {
     tendon_ids.clear();
     actuator_ids.clear();
     tendon_tension_ids.clear();
+    ligament_tension_ids.clear();
 
     // --- Initialize joints (based on filtered joint_names) ---
     for (const auto& name : joint_names) {
@@ -171,6 +183,22 @@ void SimulationManager::initializeIds() {
             tendon_tension_ids.push_back(-1);
         }
     }
+
+    // --- Initialize ligaments, actuators, and sensors ---
+    for (const auto& name : ligament_names) {
+
+        // Ligament ID
+        ligament_ids.push_back(mj_name2id(m, mjOBJ_TENDON, name.c_str()));
+
+        // Corresponding ligament limit force sensor
+        int sid = mj_name2id(m, mjOBJ_SENSOR, name.c_str());
+        if (sid >= 0 && m->sensor_type[sid] == mjSENS_TENDONLIMITFRC) {
+            ligament_tension_ids.push_back(m->sensor_adr[sid]);
+        } else {
+            ligament_tension_ids.push_back(-1);
+        }
+    }
+
 }
 
 // Load joint and tendon names from the model for JSON output
@@ -181,6 +209,7 @@ void SimulationManager::loadModelNames()
     joint_names.clear();
     joint_names_rpy.clear();
     tendon_names.clear();
+    ligament_names.clear();
 
     // --- Load joint names (excluding ignored joints) ---
     for (int i = 0; i < m->njnt; i++) {
@@ -210,6 +239,9 @@ void SimulationManager::loadModelNames()
         const char* name = mj_id2name(m, mjOBJ_TENDON, i);
         if (name && !isIgnoredLigament(name)) {
             tendon_names.emplace_back(name);
+        }
+        else if (name && isIgnoredLigament(name)) {
+            ligament_names.emplace_back(name);
         }
     }
 

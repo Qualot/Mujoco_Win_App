@@ -29,15 +29,18 @@ private:
     std::vector<int> joint_ids;
     std::vector<int> tendon_ids;
     std::vector<int> actuator_ids;
+    std::vector<int> ligament_ids;
 
     std::vector<int> joint_qpos_ids;
     std::vector<int> joint_qvel_ids;
 
     std::vector<int> tendon_tension_ids;  // Tendon actuator force sensor indices in sensordata
+    std::vector<int> ligament_tension_ids;  // Ligament limit force sensor indices in sensordata
 
     std::vector<std::string> joint_names;
     std::vector<std::string> joint_names_rpy; // expand free joints and ball joints into separate roll/pitch/yaw entries
     std::vector<std::string> tendon_names;
+    std::vector<std::string> ligament_names;
 
     std::vector<double> processTenJ(int rows, int cols, int start_id);
     std::vector<double> processTenJFiltered(bool include_translation);
