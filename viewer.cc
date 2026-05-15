@@ -79,6 +79,12 @@ void Viewer::render() {
     mjv_updateScene(m, d, &opt, &pert, &cam, mjCAT_ALL, &scn);
     
     mjr_render(viewport, &scn, &con);
+
+
+    char status_str[100];
+    std::sprintf(status_str, "Time: %.2f", d->time);
+    mjr_overlay(mjGRID_TOPLEFT, mjGRID_TOPLEFT, viewport, "MuJoCo Simulation", status_str, &con);
+
     glfwSwapBuffers(window);
 }
 
